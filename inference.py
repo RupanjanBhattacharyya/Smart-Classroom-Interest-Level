@@ -6,6 +6,7 @@ from deployment.tensorflow_detector import *
 from deployment.utils import label_map_util
 from deployment.utils import visualization_utils_color as vis_util
 from deployment.video_threading_optimization import *
+import matplotlib.pyplot as plt
 
 ## OPTIONS ##
 
@@ -116,12 +117,24 @@ if __name__ == "__main__":
         tf.compat.v1.reset_default_graph()
         detector = TensorflowDetector(PATH_TO_CKPT, PATH_TO_CLASS, PATH_TO_REGRESS)
         predict_from_camera(detector)
-
+        report = detector.generate_report()
+        print(report)
+        fig = detector.plot_detector_results()
+        plt.show()
+        # Optionally save the figure
+        if fig:
+            fig.savefig('interest_analysis.png', dpi=300, bbox_inches='tight')
     elif sys.argv[1] == '-v':
         K.clear_session()
         tf.compat.v1.reset_default_graph()
         detector = TensorflowDetector(PATH_TO_CKPT, PATH_TO_CLASS, PATH_TO_REGRESS)
         predict_from_video(detector, 'test.mp4')
-
+        report = detector.generate_report()
+        print(report)
+        fig = detector.plot_detector_results()
+        plt.show()
+        # Optionally save the figure
+        if fig:
+            fig.savefig('interest_analysis.png', dpi=300, bbox_inches='tight')
     else:
         print('Wrong argument')
