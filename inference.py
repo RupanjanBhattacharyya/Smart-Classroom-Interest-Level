@@ -121,7 +121,9 @@ if __name__ == "__main__":
         print(report)
         fig = detector.plot_detector_results()
         plt.show()
-        fig.savefig('interest_analysis.png', dpi=300, bbox_inches='tight')
+        # Optionally save the figure
+        if fig:
+            fig.savefig('interest_analysis.png', dpi=300, bbox_inches='tight')
     elif sys.argv[1] == '-v':
         K.clear_session()
         tf.compat.v1.reset_default_graph()
@@ -131,6 +133,8 @@ if __name__ == "__main__":
         print(report)
         fig = detector.plot_detector_results()
         plt.show()
-        fig.savefig('interest_analysis.png', dpi=300, bbox_inches='tight')
+        # Optionally save the figure
+        if fig:
+            fig.savefig('interest_analysis.png', dpi=300, bbox_inches='tight')
     else:
         print('Wrong argument')
