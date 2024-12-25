@@ -87,8 +87,8 @@ def predict_from_video(detector, file_path):
             boxes, scores, classes, num_detections, emotions = detector.run(image)
 
             text = "classes: {}".format(emotions)
-            cv2.putText(image, text, org=(25, 25), fontFace=cv2.FONT_HERSHEY_DUPLEX,
-                        fontScale=0.35, color=(0, 255, 0))
+            cv2.putText(image, text, org=(150, 150), fontFace=cv2.FONT_HERSHEY_DUPLEX,
+                        fontScale=2, color=(0, 0, 255), thickness=2)
 
             vis_util.visualize_boxes_and_labels_on_image_array(
                 image,
@@ -97,7 +97,7 @@ def predict_from_video(detector, file_path):
                 np.squeeze(scores),
                 category_index,
                 use_normalized_coordinates=True,
-                line_thickness=1)
+                line_thickness=7)
 
         out.write(image)
         fps.update()
