@@ -82,6 +82,18 @@ class TensorflowDetector(object):
         interest_score = emotion_score * (valence_weight * valence_norm + arousal_weight * arousal_norm)
         return round(interest_score, 2)
 
+    def generate_attention_remark(self, interest_percentage):
+        if interest_percentage >= 80:
+            return "Highly attentive with minimal signs of distraction."
+        elif interest_percentage >= 60:
+            return "Generally attentive with occasional distraction."
+        elif interest_percentage >= 40:
+            return "Moderately attentive with regular periods of distraction."
+        elif interest_percentage >= 20:
+            return "Frequently distracted with occasional periods of attention."
+        else:
+            return "Predominantly distracted with minimal attention spans."
+
     def generate_report(self):
         if not self.emotion_history:
             return "No data collected for report generation"
@@ -101,12 +113,19 @@ class TensorflowDetector(object):
         avg_valence = np.mean(self.valence_history)
         avg_arousal = np.mean(self.arousal_history)
 
+        # Calculate interest percentage and generate attention remark
+        interest_percentage = interest_counts.get('Interested', 0) / len(self.interest_history) * 100
+        attention_remark = self.generate_attention_remark(interest_percentage)
+
         report = f"""
 === Interest Level Report ===
 Dominant Emotion: {dominant_emotion} ({dominant_emotion_score:.2%})
 Average Emotion Score: {avg_emotion_score:.3f}
 Dominant Interest Level: {dominant_interest} ({dominant_interest_score:.2%})
 Average Interest Score: {avg_interest_score:.3f}
+
+Attention Analysis:
+{attention_remark}
 
 Detailed Metrics:
 - Total Observations: {len(self.emotion_history)}
