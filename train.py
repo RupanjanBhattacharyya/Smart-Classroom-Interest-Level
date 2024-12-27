@@ -108,7 +108,7 @@ def train(t_type, model, output_path, epochs, batch_size):
             validation_data=val_generator,
             validation_steps=v_steps,
             callbacks=[
-                ModelCheckpoint(output_path + '{epoch:02d}_{val_loss:.3f}_T.h5', monitor='val_acc',
+                ModelCheckpoint('MobileNetV2/classificator' + '{epoch:02d}_{val_loss:.3f}_T.h5', monitor='val_acc',
                                 save_best_only=False,
                                 save_weights_only=True),
                 CSVLogger('log_classification.csv', append=True, separator=';')],
@@ -122,19 +122,19 @@ def train(t_type, model, output_path, epochs, batch_size):
             validation_data=val_generator,
             validation_steps=v_steps,
             callbacks=[
-                ModelCheckpoint(output_path + '{epoch:02d}_{val_loss:.4f}_T.h5', save_best_only=False,
+                ModelCheckpoint('MobileNetV2/classificator' + '{epoch:02d}_{val_loss:.4f}_T.h5', save_best_only=False,
                                 save_weights_only=True),
                 CSVLogger('log_regression.csv', append=True, separator=';')],
             workers=8,
             use_multiprocessing=True)
 
     print('** EXPORTING MODEL **')
-    np.save(output_path + '_HIST', history.history)
+    np.save('MobileNetV2/classificator' + '_HIST', history.history)
     for layer in model.layers:
         if t_type(layer) is Dropout:
             model.layers.remove(layer)
-    model.save_weights(output_path + '_weights.h5')
-    model.save(output_path + '_full_model.h5')
+    model.save_weights('MobileNetV2/classificator' + '_weights.h5')
+    model.save('MobileNetV2/classificator' + '_full_model.h5')
 
 
 if __name__ == '__main__':
@@ -186,12 +186,12 @@ if __name__ == '__main__':
     CCC                  0.5822               0.463
     '''
     model = mobilenet_v2_model(CLASSIFY)
-    train(CLASSIFY, model, 'MobileNetV2', 10, 64)
+    train(CLASSIFY, model, 'deployment/frozen_graphs/classificator_full_model.pb', 10, 64)
 
     model = mobilenet_v2_model(REGRESS)
-    model.load_weights('MobileNetV2')
+    model.load_weights('MobileNetV2/classificator_weights.h5')
     for layer in model.layers:
         if type(layer) is Dropout:
             model.layers.remove(layer)
     regression_model = regressor_from_classifier(model, dropout=True)    
-    train(REGRESS, regression_model, 'MobileNetV2', 10, 16)
+    train(REGRESS, regression_model, 'deployment/frozen_graphs/regressor_full_model.pb', 10, 16)
