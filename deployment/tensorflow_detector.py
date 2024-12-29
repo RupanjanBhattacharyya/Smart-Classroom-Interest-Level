@@ -7,19 +7,22 @@ from PIL import Image
 from keras.applications.mobilenet import preprocess_input
 from collections import Counter
 import matplotlib.pyplot as plt
+import json
+from datetime import datetime
+import os
+
 
 emotion_classes = ['Neutral', 'Happy', 'Sad', 'Surprised', 'Afraid', 'Disgusted', 'Angry', 'Contemptuous']
-interest_classes = ['Not Interested', 'Interested']
 
 class TensorflowDetector(object):
     def __init__(self, PATH_TO_CKPT, PATH_TO_CLASS, PATH_TO_REGRESS):
         self.emotion_history = []
-        self.interest_history = []
         self.valence_history = []
         self.arousal_history = []
         self.emotion_scores = []  
-        self.interest_scores = []
+        self.emotion_index = []
 
+        # Initialize session setup code remains exactly the same
         self.detection_graph = tf.Graph()
         with self.detection_graph.as_default():
             od_graph_def = tf.compat.v1.GraphDef()
@@ -59,78 +62,81 @@ class TensorflowDetector(object):
             config = tf.compat.v1.ConfigProto()
             config.gpu_options.allow_growth = True
             self.sess_3 = tf.compat.v1.Session(graph=self.regression_graph, config=config)
-
-    def map_emotion_to_interest(self, emotion):
-        interested_emotions = ['Happy', 'Neutral', 'Surprised']
-        return 'Interested' if emotion in interested_emotions else 'Not Interested'
+    
+    
+    def save_history_to_json(self):
+        """Save the detection history to a JSON file"""
+        history_data = {
+            'timestamp': datetime.now().isoformat(),
+            'session_data': []
+        }
+        DATA_DIR = "emotion_data"
+        if not os.path.exists(DATA_DIR):
+            os.makedirs(DATA_DIR)
+        
+        for i in range(len(self.emotion_history)):
+            entry = {
+                'emotion': self.emotion_history[i],
+                'emotion_score': float(self.emotion_scores[i]),
+                'emotion_index': float(self.emotion_index[i]),
+                'valence': float(self.valence_history[i]),
+                'arousal': float(self.arousal_history[i])
+            }
+            history_data['session_data'].append(entry)
+        
+        filename = f'emotion_detection_history_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        filepath = os.path.join(DATA_DIR, filename)
+        
+        # Save the file
+        with open(filepath, 'w') as f:
+            json.dump(history_data, f, indent=4)
+        
+        return filepath
 
     def calculate_emotion_score(self, prediction_row):
-        # Calculate emotion confidence score from model output
         return round(np.max(prediction_row), 2)
 
-    def calculate_interest_score(self, emotion_score, valence, arousal):
-        # Based on Russell's Circumplex Model
-        # Source: Russell, J. A. (1980). A circumplex model of affect.
-        valence_weight = 0.4  # Weight for emotional positivity
-        arousal_weight = 0.6  # Weight for emotional intensity
-        
-        # Normalize valence and arousal to 0-1 scale
+    def calculate_emotion_index(self, emotion, emotion_score, valence, arousal):
+        """
+        Calculate emotion index and apply emotion-based factor
+        Positive factor for Happy, Neutral, Surprised
+        Negative factor for all other emotions
+        """
+        valence_weight = 0.4
+        arousal_weight = 0.6
         valence_norm = (valence + 1) / 2
         arousal_norm = (arousal + 1) / 2
         
-        # Calculate interest score using dimensional model
-        interest_score = emotion_score * (valence_weight * valence_norm + arousal_weight * arousal_norm)
-        return round(interest_score, 2)
-
-    def generate_attention_remark(self, interest_percentage):
-        if interest_percentage >= 80:
-            return "Highly attentive with minimal signs of distraction."
-        elif interest_percentage >= 60:
-            return "Generally attentive with occasional distraction."
-        elif interest_percentage >= 40:
-            return "Moderately attentive with regular periods of distraction."
-        elif interest_percentage >= 20:
-            return "Frequently distracted with occasional periods of attention."
-        else:
-            return "Predominantly distracted with minimal attention spans."
+        base_score = emotion_score * (valence_weight * valence_norm + arousal_weight * arousal_norm)
+        
+        # Apply emotion-based factor
+        emotion_factor = 1 if emotion in ['Happy', 'Neutral', 'Surprised'] else -1
+        final_score = base_score * emotion_factor
+        
+        return round(final_score, 5)
 
     def generate_report(self):
         if not self.emotion_history:
             return "No data collected for report generation"
 
         emotion_counts = Counter(self.emotion_history)
-        interest_counts = Counter(self.interest_history)
-        
         dominant_emotion = emotion_counts.most_common(1)[0][0]
         dominant_emotion_score = emotion_counts[dominant_emotion] / len(self.emotion_history)
         
-        dominant_interest = interest_counts.most_common(1)[0][0]
-        dominant_interest_score = interest_counts[dominant_interest] / len(self.interest_history)
-        
         avg_emotion_score = np.mean(self.emotion_scores)
-        avg_interest_score = np.mean(self.interest_scores)
-        
+        avg_emotion_index = np.mean(self.emotion_index)
         avg_valence = np.mean(self.valence_history)
         avg_arousal = np.mean(self.arousal_history)
 
-        # Calculate interest percentage and generate attention remark
-        interest_percentage = interest_counts.get('Interested', 0) / len(self.interest_history) * 100
-        attention_remark = self.generate_attention_remark(interest_percentage)
-
         report = f"""
-=== Interest Level Report ===
+=== Detection Report ===
 Dominant Emotion: {dominant_emotion} ({dominant_emotion_score:.2%})
 Average Emotion Score: {avg_emotion_score:.3f}
-Dominant Interest Level: {dominant_interest} ({dominant_interest_score:.2%})
-Average Interest Score: {avg_interest_score:.3f}
-
-Attention Analysis:
-{attention_remark}
+Average emotion index: {avg_emotion_index:.3f}
 
 Detailed Metrics:
 - Total Observations: {len(self.emotion_history)}
 - Emotion Distribution: {dict(emotion_counts)}
-- Interest Distribution: {dict(interest_counts)}
 - Average Valence: {avg_valence:.3f}
 - Average Arousal: {avg_arousal:.3f}
 ========================
@@ -155,28 +161,26 @@ Detailed Metrics:
         plt.xticks(rotation=45)
         plt.ylabel('Count')
 
-        # Plot 2: Interest Level Distribution
+        # Plot 2: emotion index Distribution
         plt.subplot(2, 2, 2)
-        interest_counts = Counter(self.interest_history)
-        plt.pie(interest_counts.values(), 
-                labels=interest_counts.keys(),
-                autopct='%1.1f%%',
-                colors=['lightcoral', 'lightgreen'])
-        plt.title('Interest Level Distribution')
+        plt.hist(self.emotion_index, bins=20, color='skyblue', edgecolor='black')
+        plt.title('emotion index Distribution')
+        plt.xlabel('emotion index')
+        plt.ylabel('Frequency')
 
-        # Plot 3: Emotion vs Interest Scores
+        # Plot 3: Emotion vs emotion indexs
         plt.subplot(2, 2, 3)
-        plt.scatter(self.emotion_scores, self.interest_scores, alpha=0.5)
+        plt.scatter(self.emotion_scores, self.emotion_index, alpha=0.5)
         plt.xlabel('Emotion Confidence Score')
-        plt.ylabel('Interest Score')
-        plt.title('Emotion vs Interest Correlation')
+        plt.ylabel('emotion index')
+        plt.title('Emotion vs Emotion Index Correlation')
         plt.grid(True)
 
         # Plot 4: Valence-Arousal Distribution
         plt.subplot(2, 2, 4)
         sc = plt.scatter(self.valence_history, self.arousal_history, 
-                        c=self.interest_scores, cmap='RdYlGn', alpha=0.5)
-        plt.colorbar(sc, label='Interest Score')
+                        c=self.emotion_index, cmap='RdYlGn', alpha=0.5)
+        plt.colorbar(sc, label='emotion index')
         plt.axhline(y=0, color='k', linestyle='--', alpha=0.3)
         plt.axvline(x=0, color='k', linestyle='--', alpha=0.3)
         plt.title('Valence-Arousal Distribution')
@@ -205,13 +209,11 @@ Detailed Metrics:
         print('Detection time: {}'.format(round(time.time() - start_time, 8)))
         print('--------------------------------------')
 
-        # Emotion classification and VA regression setup
         classification_input = self.classification_graph.get_tensor_by_name('input_1:0')
         classification_output = self.classification_graph.get_tensor_by_name('dense_2/Softmax:0')
         regression_input = self.regression_graph.get_tensor_by_name('input_1:0')
         regression_output = self.regression_graph.get_tensor_by_name('dense_2/BiasAdd:0')
 
-        # Process detected faces
         images_for_prediction = []
         for i in range(min(20, np.squeeze(boxes).shape[0])):
             if scores is None or np.squeeze(scores)[i] > 0.7:
@@ -224,50 +226,43 @@ Detailed Metrics:
                 images_for_prediction.append(image_pred)
 
         emotions_detected = []
-        interest_levels = []
+        emotion_index_detected = []
         
         if len(images_for_prediction) > 0:
-            # Emotion classification
             start_time = time.time()
             emotion_prediction = self.sess_2.run(classification_output,
                                                feed_dict={classification_input: images_for_prediction})
             print('Classification time: {}'.format(round(time.time() - start_time, 8)))
             
-            # Valence-Arousal regression
             start_time = time.time()
             va_prediction = self.sess_3.run(regression_output,
                                           feed_dict={regression_input: images_for_prediction})
             print('Regression time: {}'.format(round(time.time() - start_time, 8)))
             
-            # Process predictions
             for idx, row in enumerate(emotion_prediction):
-                # Get emotion
                 pred = np.argmax(row)
                 emotion = emotion_classes[pred]
                 
-                # Calculate scores
                 emotion_score = self.calculate_emotion_score(row)
                 valence = va_prediction[idx][0]
                 arousal = va_prediction[idx][1]
-                interest_score = self.calculate_interest_score(emotion_score, valence, arousal)
+                emotion_index = self.calculate_emotion_index(emotion, emotion_score, valence, arousal)
                 
-                # Map to interest level
-                interest = self.map_emotion_to_interest(emotion)
-                
-                # Store results
                 self.emotion_history.append(emotion)
-                self.interest_history.append(interest)
                 self.emotion_scores.append(emotion_score)
-                self.interest_scores.append(interest_score)
+                self.emotion_index.append(emotion_index)
                 self.valence_history.append(valence)
                 self.arousal_history.append(arousal)
                 
                 emotions_detected.append(emotion)
-                interest_levels.append(interest)
+                emotion_index_detected.append(emotion_index)
                 
-                # Print results
                 print(f"Emotion: {emotion} - Confidence Score: {emotion_score:.2f}")
-                print(f"Interest Level: {interest} - Interest Score: {interest_score:.2f}")
+                print(f"emotion index: {emotion_index:.2f}")
                 print(f"Valence: {valence:.3f}, Arousal: {arousal:.3f}\n")
 
-        return boxes, scores, classes, num_detections, interest_levels
+        # Save history to JSON after processing
+        json_filename = self.save_history_to_json()
+        print(f"Detection history saved to: {json_filename}")
+
+        return boxes, scores, classes, num_detections, emotions_detected, emotion_index_detected
